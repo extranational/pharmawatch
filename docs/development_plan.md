@@ -21,12 +21,13 @@ PharmaWatch is an automated intelligence platform designed to provide high-fidel
 ## **Phase 2: Architecture & Infrastructure Design**
 **Objective:** *Design a scalable, modular ecosystem for high-volume ingestion and LLM-powered synthesis.*
 
-*   **2.1 Distributed Ingestion Layer:** Design a task-based architecture (e.g., Celery/Redis or Temporal) to manage a fleet of specialized scrapers and API collectors.
-*   **2.2 Multi-Tiered Storage Strategy:**
-    *   **Raw Data Lake (Object Storage):** For long-term storage of original HTML, PDFs, and JSON responses.
-    *   **Structured Relational DB (PostgreSQL):** For metadata, entity relationships, and structured signal tracking.
-    *   **Vector Database (Milvus/Pinecone/Weaviate):** To power RAG (Retrieval-Augmented Generation) and semantic similarity searches.
-*   **2.3 Intelligence Orchestration Layer:**
+* **2.1 Distributed Ingestion Layer:** Design a task-based architecture (e.g., Celery/Redis or Temporal) to manage a fleet of specialized scrapers and API collectors.
+* **2.2 Multi-Tiered Storage Strategy:**
+    * **Raw Data Lake (Object Storage):** For long-term storage of original HTML, PDFs, and JSON responses.
+    * **Structured Relational DB (PostgreSQL):** For metadata, entity relationships, and structured signal tracking.
+    * **Vector Database (Milvus/Pinecone/Weaviate):** [BACKLOG] To power RAG (Retrieval-Augmented Generation) and semantic similarity searches.
+* **2.3 Intelligence Orchestration Layer:**
+...
     *   **Processing Pipeline:** Cleaning, normalization, and Named Entity Recognition (NER) to identify drugs, companies, and molecules.
     *   **LLM Synthesis Engine:** Implementation of an LLM orchestration framework (e.g., LangChain or LlamaIndex) to perform cross-source aggregation and summarization.
 *   **2.4 Cloud-Native Infrastructure:** Containerization (Docker/Kubernetes) and CI/CD pipeline setup to ensure reliable, automated deployments.
