@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: pharma_user
+      POSTGRES_PASSWORD: pharma_password
+      POSTGRES_DB: pharmawatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Cache/Queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # LLM Gateway
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "4000:4000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    # In a real setup, we'd provide a config.yaml for LiteLLM
+    command: ["--config", "/app/config.yaml"]
+
+  # Orchestration Service
+  orchestrator:
+    build:
+      context: ./services/orchestrator
+      dockerfile: ../../docker/python/Dockerfile
+    depends_on:
+      - db
+      - redis
+      - litellm
+    environment:
+      - DATABASE_URL=postgresql://pharma_user:pharma_password@db:5432/pharmawatch
+      - REDIS_URL=redis://redis:6379/0
+      - LITELLM_PROXY_URL=http://litellm:4000
+    volumes:
+      - ./services/orchestrator:/app
+
+  # Sample Harvester (Example)
+  harvester_chictr:
+    build:
+      context: ./services/harvester
+      dockerfile: ../../docker/python/Dockerfile
+    depends_on:
+      - redis
+      - db
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://pharma_user:pharma_password@db:5432/pharmawatch
+    volumes:
+      - ./services/harvester:/app
+
+volumes:
+  postgres_data:
