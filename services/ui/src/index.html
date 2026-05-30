@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PharmaWatch Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+           background: #0f1014; color: #e1e4e8; line-height: 1.6; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    header { display: flex; justify-content: space-between; align-items: center;
+             border-bottom: 1px solid #21262d; padding-bottom: 1.5rem; margin-bottom: 2rem; }
+    h1 { font-size: 1.5rem; font-weight: 600; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+             gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: #161b22; border: 1px solid #21262d; border-radius: 8px;
+                 padding: 1.25rem; }
+    .stat-card .label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase;
+                        letter-spacing: 0.05em; }
+    .stat-card .value { font-size: 2rem; font-weight: 700; margin-top: 0.25rem; color: #58a6ff; }
+    .filters { margin-bottom: 1.5rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .filters select, .filters input {
+      background: #161b22; border: 1px solid #30363d; color: #e1e4e8;
+      padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.9rem; }
+    .signal-feed { display: flex; flex-direction: column; gap: 0.75rem; }
+    .signal-card { background: #161b22; border: 1px solid #21262d; border-radius: 8px;
+                   padding: 1.25rem; transition: border-color 0.15s; }
+    .signal-card:hover { border-color: #58a6ff; }
+    .signal-card .title { font-weight: 600; margin-bottom: 0.5rem; }
+    .signal-card .meta { font-size: 0.8rem; color: #8b949e; margin-bottom: 0.75rem; }
+    .signal-card .summary { font-size: 0.9rem; color: #c9d1d9; }
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px;
+             font-size: 0.7rem; font-weight: 600; margin-left: 0.5rem; }
+    .badge-approval { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb44; }
+    .badge-regulatory { background: #d2992222; color: #d29922; border: 1px solid #d2992244; }
+    .badge-policy { background: #3fb95022; color: #3fb950; border: 1px solid #3fb95044; }
+    .badge-trial { background: #a371f722; color: #a371f7; border: 1px solid #a371f744; }
+    .no-results { text-align: center; color: #8b949e; padding: 3rem 0; }
+    #load-more { display: block; margin: 2rem auto 0; padding: 0.6rem 2rem;
+                  background: #21262d; border: 1px solid #30363d; color: #e1e4e8;
+                  border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    #load-more:hover { background: #30363d; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📊 PharmaWatch Dashboard</h1>
+      <span style="color:#8b949e;font-size:0.85rem">Phase 3 MVP</span>
+    </header>
+
+    <div class="stats" id="stats">
+      <div class="stat-card"><div class="label">Total Signals</div><div class="value" id="stat-total">—</div></div>
+      <div class="stat-card"><div class="label">ChiCTR</div><div class="value" id="stat-chictr">—</div></div>
+      <div class="stat-card"><div class="label">NMPA</div><div class="value" id="stat-nmpa">—</div></div>
+      <div class="stat-card"><div class="label">Avg Confidence</div><div class="value" id="stat-conf">—</div></div>
+    </div>
+
+    <div class="filters">
+      <select id="filter-source"><option value="">All Sources</option><option>ChiCTR</option><option>NMPA</option></select>
+      <select id="filter-cat"><option value="">All Categories</option><option>drug_approval</option><option>regulatory</option><option>policy</option><option>clinical_trial</option></select>
+      <input id="filter-search" type="text" placeholder="Search signals…" style="flex:1;min-width:200px">
+    </div>
+
+    <div class="signal-feed" id="feed"></div>
+    <div class="no-results" id="no-results" style="display:none">No matching signals found.</div>
+    <button id="load-more" style="display:none">Load More</button>
+  </div>
+
+  <script>
+    const API = '/api';
+    let offset = 0, limit = 20;
+
+    async function loadStats() {
+      const r = await fetch(`${API}/signals/stats`).then(r=>r.json());
+      document.getElementById('stat-total').textContent = r.total || 0;
+      document.getElementById('stat-chictr').textContent = r.by_source.ChiCTR || 0;
+      document.getElementById('stat-nmpa').textContent = r.by_source.NMPA || 0;
+      document.getElementById('stat-conf').textContent = r.avg_confidence || '—';
+    }
+
+    async function loadSignals() {
+      const src = document.getElementById('filter-source').value;
+      const cat = document.getElementById('filter-cat').value;
+      const q = document.getElementById('filter-search').value;
+      const params = new URLSearchParams({ source: src, category: cat, limit });
+      const r = await fetch(`${API}/signals?${params}`).then(r=>r.json());
+      const feed = document.getElementById('feed');
+      const noRes = document.getElementById('no-results');
+      if (offset === 0) feed.innerHTML = '';
+      r.signals.forEach(s => {
+        const badge = s.category === 'drug_approval' ? 'badge-approval'
+                    : s.category === 'regulatory' ? 'badge-regulatory'
+                    : s.category === 'policy' ? 'badge-policy' : 'badge-trial';
+        feed.innerHTML += `<div class="signal-card">
+          <div><span class="title">${s.title}</span><span class="badge ${badge}">${s.source}</span></div>
+          <div class="meta">${s.category} · ${s.date || 'N/A'}</div>
+          <div class="summary">${s.summary || 'Signal received; processing pending.'}</div>
+        </div>`;
+      });
+      noRes.style.display = r.signals.length === 0 && offset === 0 ? 'block' : 'none';
+      document.getElementById('load-more').style.display = r.signals.length >= limit ? 'block' : 'none';
+    }
+
+    document.getElementById('load-more').addEventListener('click', () => { offset += limit; loadSignals(); });
+    document.getElementById('filter-source').addEventListener('change', () => { offset = 0; loadSignals(); });
+    document.getElementById('filter-cat').addEventListener('change', () => { offset = 0; loadSignals(); });
+    document.getElementById('filter-search').addEventListener('input', () => { offset = 0; loadSignals(); });
+
+    loadStats(); loadSignals();
+  </script>
+</body>
+</html>

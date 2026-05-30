@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Database
+  # ─── PostgreSQL ──────────────────────────────────────
   db:
     image: postgres:15-alpine
     environment:
@@ -12,52 +12,90 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharma_user -d pharmawatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Cache/Queue
+  # ─── Redis (Task Queue + Cache) ─────────────────────
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-  # LLM Gateway
+  # ─── LiteLLM Proxy (LLM Gateway) ───────────────────
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     ports:
       - "4000:4000"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-    # In a real setup, we'd provide a config.yaml for LiteLLM
     command: ["--config", "/app/config.yaml"]
 
-  # Orchestration Service
+  # ─── Harvester Service ──────────────────────────────
+  harvester:
+    build:
+      context: ./services/harvester
+      dockerfile: ../../docker/python/Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LITELLM_URL=http://litellm:4000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─── Orchestrator Service ───────────────────────────
   orchestrator:
     build:
       context: ./services/orchestrator
       dockerfile: ../../docker/python/Dockerfile
     depends_on:
+      - harvester
       - db
-      - redis
-      - litellm
     environment:
-      - DATABASE_URL=postgresql://pharma_user:pharma_password@db:5432/pharmawatch
-      - REDIS_URL=redis://redis:6379/0
-      - LITELLM_PROXY_URL=http://litellm:4000
+      - REDIS_URL=redis://redis:6379/1
+      - LITELLM_URL=http://litellm:4000
+      - OUTPUT_DIR=/app/output
     volumes:
       - ./services/orchestrator:/app
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  # Sample Harvester (Example)
-  harvester_chictr:
+  # ─── UI Backend (Bun/React) ─────────────────────────
+  ui:
     build:
-      context: ./services/harvester
-      dockerfile: ../../docker/python/Dockerfile
+      context: ./services/ui
+      dockerfile: ../node/Dockerfile
     depends_on:
-      - redis
-      - db
+      orchestrator:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://pharma_user:pharma_password@db:5432/pharmawatch
+      - API_URL=http://orchestrator:8000
     volumes:
-      - ./services/harvester:/app
+      - ./services/ui:/app
+    command: bun run dev
 
 volumes:
   postgres_data:
+  redis_data:
